@@ -1,0 +1,107 @@
+{
+ "_doc": "detect-objects-with-sample-object-detection.mdx",
+ "_out": "object_detection_pipeline-regenerate.svg",
+ "nodes": [
+  {
+   "id": "camera",
+   "lines": [
+    "camera_node",
+    "(qrb_ros_camera)"
+   ],
+   "kind": "qualcomm",
+   "row": 0,
+   "col": 0
+  },
+  {
+   "id": "preprocess",
+   "lines": [
+    "yolo_preprocess_node",
+    "(qrb_ros_cv_tensor_",
+    "common_process)"
+   ],
+   "kind": "qualcomm",
+   "row": 0,
+   "col": 1
+  },
+  {
+   "id": "inference",
+   "lines": [
+    "nn_inference_node",
+    "(qrb_ros_nn_inference)"
+   ],
+   "kind": "qualcomm",
+   "row": 0,
+   "col": 2
+  },
+  {
+   "id": "postprocess",
+   "lines": [
+    "yolo_detection_",
+    "postprocess_node",
+    "(qrb_ros_yolo_process)"
+   ],
+   "kind": "qualcomm",
+   "row": 0,
+   "col": 3
+  },
+  {
+   "id": "overlay",
+   "lines": [
+    "yolo_detection_",
+    "overlay_node",
+    "(qrb_ros_yolo_process)"
+   ],
+   "kind": "qualcomm",
+   "row": 1,
+   "col": 1
+  },
+  {
+   "id": "result",
+   "lines": [
+    "/yolo_detect_overlay"
+   ],
+   "kind": "topic",
+   "row": 1,
+   "col": 2
+  }
+ ],
+ "edges": [
+  {
+   "from": "camera",
+   "to": "preprocess",
+   "label": "/cam0_stream1"
+  },
+  {
+   "from": "preprocess",
+   "to": "inference",
+   "label": "/qrb_inference_input_tensor"
+  },
+  {
+   "from": "inference",
+   "to": "postprocess",
+   "label": "/yolo_detect_tensor_output"
+  },
+  {
+   "from": "postprocess",
+   "to": "overlay",
+   "label": "/yolo_detect_result",
+   "route": "wrap",
+   "enterDx": 36
+  },
+  {
+   "from": "preprocess",
+   "to": "overlay",
+   "label": "/resized_image",
+   "route": "v",
+   "exitDx": -36,
+   "enterDx": -36,
+   "labelDy": -30
+  },
+  {
+   "from": "overlay",
+   "to": "result",
+   "label": ""
+  }
+ ],
+ "groups": []
+}

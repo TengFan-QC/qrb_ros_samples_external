@@ -1,0 +1,128 @@
+{
+ "_out": "qrb_ros_audio_service_pipeline-regenerate.svg",
+ "legendLabels": {
+  "external": "Application",
+  "topic": "service / topic",
+  "module": "Internal module",
+  "opensource": "Audio backend"
+ },
+ "nodes": [
+  {
+   "id": "client",
+   "lines": [
+    "Client app",
+    "ros2 service call /",
+    "audio_service_test.py"
+   ],
+   "kind": "external",
+   "row": 0,
+   "col": 0
+  },
+  {
+   "id": "srv",
+   "lines": [
+    "/audio_server",
+    "srv/AudioRequest"
+   ],
+   "kind": "topic",
+   "row": 0,
+   "col": 1
+  },
+  {
+   "id": "pcm",
+   "lines": [
+    "/qrb_audiodata",
+    "msg/AudioData"
+   ],
+   "kind": "topic",
+   "row": 0,
+   "col": 2
+  },
+  {
+   "id": "node",
+   "lines": [
+    "audio_service",
+    "ROS node",
+    "(AudioServer)"
+   ],
+   "kind": "qualcomm",
+   "row": 1,
+   "col": 1
+  },
+  {
+   "id": "manager",
+   "lines": [
+    "QRB Audio Manager",
+    "PlaybackStream /",
+    "RecordStream"
+   ],
+   "kind": "module",
+   "row": 2,
+   "col": 0
+  },
+  {
+   "id": "lib",
+   "lines": [
+    "QRB Audio",
+    "Common Lib"
+   ],
+   "kind": "module",
+   "row": 2,
+   "col": 1
+  },
+  {
+   "id": "backend",
+   "lines": [
+    "PulseAudio or ALSA",
+    "default sink / source",
+    "(wpctl status)"
+   ],
+   "kind": "opensource",
+   "row": 2,
+   "col": 2
+  }
+ ],
+ "edges": [
+  {
+   "from": "client",
+   "to": "srv",
+   "label": "",
+   "bidirectional": true
+  },
+  {
+   "from": "srv",
+   "to": "node",
+   "label": "",
+   "route": "v",
+   "bidirectional": true,
+   "exitDx": -30,
+   "enterDx": -30
+  },
+  {
+   "from": "pcm",
+   "to": "node",
+   "label": "playback in / record out",
+   "route": "wrap",
+   "bidirectional": true,
+   "enterDx": 34,
+   "labelDx": 40
+  },
+  {
+   "from": "node",
+   "to": "manager",
+   "label": "create / start / stop / mute",
+   "route": "wrap"
+  },
+  {
+   "from": "manager",
+   "to": "lib",
+   "label": ""
+  },
+  {
+   "from": "lib",
+   "to": "backend",
+   "label": ""
+  }
+ ],
+ "groups": []
+}

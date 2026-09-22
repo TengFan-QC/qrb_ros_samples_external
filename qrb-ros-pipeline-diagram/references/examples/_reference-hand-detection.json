@@ -1,0 +1,17 @@
+{"nodes":[
+ {"id":"image_publisher","lines":["image publisher","ROS node"],"kind":"qualcomm","row":0,"col":0},
+ {"id":"qrb_ros_camera","lines":["qrb_ros_camera"],"kind":"qualcomm","row":1,"col":0},
+ {"id":"hd_raw","lines":["qrb_ros_hand_detector","ROS node","(image raw process)"],"kind":"qualcomm","row":0,"col":1},
+ {"id":"nn_palm","lines":["qrb_ros_nn_inference","ROS node","(palm detection)"],"kind":"qualcomm","row":0,"col":2},
+ {"id":"hd_palm","lines":["qrb_ros_hand_detector","ROS node","(palm result process)"],"kind":"qualcomm","row":0,"col":3},
+ {"id":"nn_lm","lines":["qrb_ros_nn_inference","ROS node","(landmark detection)"],"kind":"qualcomm","row":1,"col":1},
+ {"id":"hd_lm","lines":["qrb_ros_hand_detector","ROS node","(landmark result process)"],"kind":"qualcomm","row":1,"col":2},
+ {"id":"result","lines":["/handlandmark_result"],"kind":"topic","row":1,"col":3}],
+ "edges":[
+ {"from":"provider","to":"hd_raw","label":"/image_raw","route":"step"},
+ {"from":"hd_raw","to":"nn_palm","label":"/palm_detector_input_tensor"},
+ {"from":"nn_palm","to":"hd_palm","label":"/palm_detector_output_tensor"},
+ {"from":"hd_palm","to":"nn_lm","label":"/landmark_detector_input_tensor","route":"wrap"},
+ {"from":"nn_lm","to":"hd_lm","label":"/landmark_detector_output_tensor"},
+ {"from":"hd_lm","to":"result","label":""}],
+ "groups":[{"id":"provider","title":"Image raw data provider","members":["image_publisher","qrb_ros_camera"],"innerLabel":"or"}]}

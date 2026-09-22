@@ -1,0 +1,103 @@
+{
+ "_out": "resnet101-pipeline-regenerate.svg",
+ "nodes": [
+  {
+   "id": "image_publisher",
+   "lines": [
+    "image_publisher",
+    "ROS node"
+   ],
+   "kind": "opensource",
+   "row": 0,
+   "col": 0
+  },
+  {
+   "id": "camera",
+   "lines": [
+    "camera_node",
+    "(qrb_ros_camera)"
+   ],
+   "kind": "qualcomm",
+   "row": 1,
+   "col": 0
+  },
+  {
+   "id": "pre",
+   "lines": [
+    "resnet101_node",
+    "(qrb_ros_resnet101)",
+    "image preprocess"
+   ],
+   "kind": "qualcomm",
+   "row": 0,
+   "col": 1
+  },
+  {
+   "id": "nn",
+   "lines": [
+    "nn_inference_node",
+    "(qrb_ros_nn_inference)",
+    "ResNet101 on QNN HTP"
+   ],
+   "kind": "qualcomm",
+   "row": 0,
+   "col": 2
+  },
+  {
+   "id": "post",
+   "lines": [
+    "resnet101_",
+    "postprocess_node",
+    "(qrb_ros_resnet101_",
+    "posprocess)"
+   ],
+   "kind": "qualcomm",
+   "row": 1,
+   "col": 1
+  },
+  {
+   "id": "out",
+   "lines": [
+    "/resnet101_output"
+   ],
+   "kind": "topic",
+   "row": 1,
+   "col": 2
+  }
+ ],
+ "edges": [
+  {
+   "from": "provider",
+   "to": "pre",
+   "label": "/image_raw",
+   "route": "step"
+  },
+  {
+   "from": "pre",
+   "to": "nn",
+   "label": "/qrb_inference_input_tensor"
+  },
+  {
+   "from": "nn",
+   "to": "post",
+   "label": "/qrb_inference_output_tensor",
+   "route": "wrap"
+  },
+  {
+   "from": "post",
+   "to": "out",
+   "label": ""
+  }
+ ],
+ "groups": [
+  {
+   "id": "provider",
+   "title": "Image raw data provider",
+   "members": [
+    "image_publisher",
+    "camera"
+   ],
+   "innerLabel": "or"
+  }
+ ]
+}

@@ -1,0 +1,12 @@
+{"_out":"colorspace-convert-pipeline-regenerate.svg",
+ "legendLabels":{"external":"Your ROS node","module":"Dependent library"},
+ "nodes":[
+  {"id":"pub","lines":["custom_ros_node","image publisher","(you implement)"],"kind":"external","row":0,"col":0},
+  {"id":"convert","lines":["colorspace_","convert_node","(qrb_ros_colorspace_","convert)"],"kind":"qualcomm","row":0,"col":1},
+  {"id":"sub","lines":["custom_ros_node","image subscriber","(you implement)"],"kind":"external","row":0,"col":2},
+  {"id":"lib","lines":["qrb_colorspace_","convert_lib","GPU conversion","via OpenGL ES"],"kind":"module","row":1,"col":1}],
+ "edges":[
+  {"from":"pub","to":"convert","label":"/image_raw  (dmabuf fd)"},
+  {"from":"convert","to":"sub","label":"/image  (dmabuf fd)"},
+  {"from":"convert","to":"lib","label":"","route":"v","bidirectional":true}],
+ "groups":[]}

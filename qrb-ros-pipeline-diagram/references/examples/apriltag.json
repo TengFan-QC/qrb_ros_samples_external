@@ -1,0 +1,116 @@
+{
+ "_out": "sample-apriltag-pipeline-regenerate.svg",
+ "nodes": [
+  {
+   "id": "camera",
+   "lines": [
+    "camera",
+    "(qrb_ros_camera)"
+   ],
+   "kind": "qualcomm",
+   "row": 0,
+   "col": 0
+  },
+  {
+   "id": "convert",
+   "lines": [
+    "color_convert",
+    "(qrb_ros_colorspace_",
+    "convert)"
+   ],
+   "kind": "qualcomm",
+   "row": 0,
+   "col": 1
+  },
+  {
+   "id": "rectify",
+   "lines": [
+    "rectify",
+    "(image_proc::",
+    "RectifyNode)"
+   ],
+   "kind": "opensource",
+   "row": 0,
+   "col": 2
+  },
+  {
+   "id": "apriltag",
+   "lines": [
+    "apriltag",
+    "(apriltag_ros::",
+    "AprilTagNode)"
+   ],
+   "kind": "opensource",
+   "row": 0,
+   "col": 3
+  },
+  {
+   "id": "detections",
+   "lines": [
+    "/apriltag/detections"
+   ],
+   "kind": "topic",
+   "row": 1,
+   "col": 2
+  },
+  {
+   "id": "tf",
+   "lines": [
+    "/tf"
+   ],
+   "kind": "topic",
+   "row": 1,
+   "col": 3
+  }
+ ],
+ "edges": [
+  {
+   "from": "camera",
+   "to": "convert",
+   "label": "/apriltag/image_nv12"
+  },
+  {
+   "from": "convert",
+   "to": "rectify",
+   "label": "/apriltag/image_rgb8"
+  },
+  {
+   "from": "rectify",
+   "to": "apriltag",
+   "label": "/apriltag/image_rect"
+  },
+  {
+   "from": "camera",
+   "to": "rectify",
+   "label": "/apriltag/camera_info",
+   "route": "above",
+   "lane": 0,
+   "exitDx": 38
+  },
+  {
+   "from": "camera",
+   "to": "apriltag",
+   "label": "/apriltag/camera_info",
+   "route": "above",
+   "lane": 1,
+   "exitDx": -38
+  },
+  {
+   "from": "apriltag",
+   "to": "detections",
+   "label": "",
+   "route": "wrap",
+   "lane": 0,
+   "exitDx": -45
+  },
+  {
+   "from": "apriltag",
+   "to": "tf",
+   "label": "",
+   "route": "v",
+   "exitDx": 45,
+   "enterDx": 45
+  }
+ ],
+ "groups": []
+}

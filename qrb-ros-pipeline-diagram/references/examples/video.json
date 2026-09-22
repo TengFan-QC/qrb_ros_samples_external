@@ -1,0 +1,27 @@
+{
+  "_doc": "encode-and-decode-video-with-qrb-ros-video.mdx",
+  "_out": "qrb-ros-video-pipeline-regenerate.svg",
+  "_note": "Derived from qrb_ros_video/test/launch/{encoder,decoder}_launch.py. The two documented ros2 launch commands create two INDEPENDENT composable-node containers in separate namespaces, so nothing links Encoder to Decoder. Every topic below is the post-remapping, namespaced name.",
+  "nodes": [
+    {"id": "image_reader", "lines": ["reader_node", "(qrb_ros::video::", "ImageReader)"],       "kind": "qualcomm", "row": 0, "col": 0},
+    {"id": "encoder",      "lines": ["encoder_node", "(qrb_ros::video::", "Encoder)"],          "kind": "qualcomm", "row": 0, "col": 1},
+    {"id": "cwriter",      "lines": ["writer_node", "(qrb_ros::video::", "CompressedWriter)"],  "kind": "qualcomm", "row": 0, "col": 2},
+
+    {"id": "creader",      "lines": ["reader_node", "(qrb_ros::video::", "CompressedReader)"],  "kind": "qualcomm", "row": 1, "col": 0},
+    {"id": "decoder",      "lines": ["decoder_node", "(qrb_ros::video::", "Decoder)"],          "kind": "qualcomm", "row": 1, "col": 1},
+    {"id": "iwriter",      "lines": ["writer_node", "(qrb_ros::video::", "ImageWriter)"],       "kind": "qualcomm", "row": 1, "col": 2}
+  ],
+  "edges": [
+    {"from": "image_reader", "to": "encoder", "label": ["/recording_ns/", "encoder_node/input"]},
+    {"from": "encoder",      "to": "cwriter", "label": ["/recording_ns/", "writer_node/compressed_image"]},
+
+    {"from": "creader",      "to": "decoder", "label": ["/playback_ns/", "decoder_node/input"]},
+    {"from": "decoder",      "to": "iwriter", "label": ["/playback_ns/", "writer_node/raw_image"]}
+  ],
+  "groups": [
+    {"id": "rec", "title": "encoder_launch.py  -  encoder_container (namespace recording_ns)",
+     "members": ["image_reader", "encoder", "cwriter"], "stack": false},
+    {"id": "play", "title": "decoder_launch.py  -  decoder_container (namespace playback_ns)",
+     "members": ["creader", "decoder", "iwriter"], "stack": false}
+  ]
+}
