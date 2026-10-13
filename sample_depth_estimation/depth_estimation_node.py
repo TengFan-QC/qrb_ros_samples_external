@@ -10,10 +10,12 @@ import threading
 import signal
 import sys
 
+from collections import deque
 from rclpy.node import Node
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 from rclpy.executors import MultiThreadedExecutor
+from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from qrb_ros_tensor_list_msgs.msg import Tensor, TensorList
 from rclpy.signals import SignalHandlerOptions
 
@@ -21,36 +23,58 @@ from rclpy.signals import SignalHandlerOptions
 class DepthEstimationNode(Node):
     def __init__(self):
         super().__init__('qrb_ros_depth_estimator')
+
+        # Separate callback groups so the (CPU-bound) preprocessing path and the
+        # postprocessing path can run concurrently on the MultiThreadedExecutor.
+        # Without this, rclpy puts every callback of a node into one mutually
+        # exclusive group, which would serialize image_callback and
+        # infer_callback and defeat the pipelining below.
+        self.input_cb_group = MutuallyExclusiveCallbackGroup()
+        self.output_cb_group = MutuallyExclusiveCallbackGroup()
+
         self.publisher_ = self.create_publisher(Image, 'depth_map', 10)
         self.bridge = CvBridge()
-        # Infer type
-        self.origin_wh = tuple()
-        self.scale = 1.0
-        self.padding = tuple()
 
         self.get_logger().info("Use qnn inference node!")
-        self.image_listener_ = self.create_subscription(Image, self.get_namespace() +'/cam0_stream1', self.image_callback, 10)           
-        self.camera_listener_ = self.create_subscription(Image, '/image_raw', self.image_callback, 10)           
+        self.image_listener_ = self.create_subscription(
+            Image, self.get_namespace() + '/cam0_stream1', self.image_callback, 30,
+            callback_group=self.input_cb_group)
+        self.camera_listener_ = self.create_subscription(
+            Image, '/image_raw', self.image_callback, 30,
+            callback_group=self.input_cb_group)
 
         self.qnn_infer_subscriber = self.create_subscription(
             TensorList,
             'qrb_inference_output_tensor',  # subscriber qnn infer output topic
             self.infer_callback,
-            10
+            30,
+            callback_group=self.output_cb_group
         )
         self.qnn_infer_publisher = self.create_publisher(
             TensorList,
             'qrb_inference_input_tensor',  # publish qnn infer input topic
-            10
+            30
         )
         # Input tensor size
         self.target_size = [518, 518]
-        self.msg_count = 0
+
+        # ---- Pipelining ----
+        # Allow a few frames to be "in flight" (preprocessed + published to QNN
+        # but not yet returned) so the preprocessing of the next frame overlaps
+        # the inference of the current one. Previously only a single frame was
+        # ever in flight (the msg_count 0/1 gate), which serialized the whole
+        # pipeline and capped throughput at 1 / (pre + infer + post).
+        self.max_in_flight = 3
+        self.in_flight = 0
+        # Per-frame metadata travels alongside the frame instead of living in
+        # shared instance variables (which would race once >1 frame is in
+        # flight). QNN preserves order and the output topic has a single
+        # publisher, so a FIFO queue reliably matches each result to its frame.
+        self.meta_queue = deque()
+        self.pipeline_lock = threading.Lock()
 
         # KeyboardInterrupt exception handle
         self.stopping = False
-        self.inference_in_progress = False
-        self.inference_lock = threading.Lock()
 
     def nv12_to_bgr(self, nv12_image, width, height):
         """
@@ -60,15 +84,18 @@ class DepthEstimationNode(Node):
         bgr = cv2.cvtColor(yuv, cv2.COLOR_YUV2BGR_NV12)
         return bgr
 
-    def image_callback(self, msg):       
+    def image_callback(self, msg):
         # Check if we're shutting down
         if self.stopping:
             return
-        
-        # Prevent concurrent inference requests
-        if self.msg_count != 0:
-            return
-        
+
+        # Backpressure: only let a bounded number of frames be in flight so the
+        # next frame's preprocessing overlaps the current frame's inference,
+        # without unboundedly queuing work faster than QNN can drain it.
+        with self.pipeline_lock:
+            if self.in_flight >= self.max_in_flight:
+                return
+        start = time.perf_counter()
         if msg.encoding == 'nv12':
             nv12_data = np.frombuffer(msg.data, dtype=np.uint8)
             image = self.nv12_to_bgr(nv12_data, msg.width, msg.height)
@@ -77,54 +104,72 @@ class DepthEstimationNode(Node):
         else:
             self.get_logger().error(f'Unsupported image encoding: {msg.encoding}')
             return
-        
+
         if image.shape[-1] != 3:
            raise ValueError("Need input 3 channels image")
         try:
-            input, self.origin_wh, self.scale, self.padding = self.preprocess(image)
-            msg = TensorList()
+            input, origin_wh, scale, padding = self.preprocess(image)
+            out_msg = TensorList()
             tensor = Tensor()
             tensor.data_type = 2
             tensor.name = "depth_anything_input_tensor"
             tensor.shape = [1, 518, 518, 3]
             tensor.data = input.tobytes()
-            msg.tensor_list.append(tensor)
+            out_msg.tensor_list.append(tensor)
 
-            # Mark inference as in progress before publishing
-            with self.inference_lock:
-                if not self.stopping:
-                    self.inference_in_progress = True
-                    try: 
-                        self.qnn_infer_publisher.publish(msg)
-                        self.msg_count += 1
-                        self.get_logger().info('Published qnn input tensor')
-                    except Exception:
-                        # Context may be invalid during shutdown, ignore logging errors
-                        self.inference_in_progress = False
-                        pass
+            # Enqueue this frame's metadata and publish atomically so the FIFO
+            # order of meta_queue matches the publish order (and therefore the
+            # order QNN returns results in). image_callback runs in a mutually
+            # exclusive group, so these never interleave with each other.
+            with self.pipeline_lock:
+                if self.stopping:
+                    return
+                self.meta_queue.append((origin_wh, scale, padding))
+                try:
+                    self.qnn_infer_publisher.publish(out_msg)
+                    self.in_flight += 1
+                except Exception:
+                    # Context may be invalid during shutdown; roll back the
+                    # metadata we just enqueued so it can't desync the FIFO.
+                    self.meta_queue.pop()
+                    return
+            latency_ms = (time.perf_counter() - start) * 1000
+            self.get_logger().info(f'Published qnn input tensor, pre process: {latency_ms:.2f} ms')
         except Exception as e:
             self.get_logger().error(f'Error preprocessing image: {e}')
         
     def infer_callback(self, msg):
         try:
-            # Mark inference as completed
-            with self.inference_lock:
-                self.inference_in_progress = False
-            
+            start = time.perf_counter()
+
             if self.stopping:
+                with self.pipeline_lock:
+                    if self.meta_queue:
+                        self.meta_queue.popleft()
+                    if self.in_flight > 0:
+                        self.in_flight -= 1
                 return
-                
+
+            # Match this result to the frame that produced it (FIFO order).
+            with self.pipeline_lock:
+                if not self.meta_queue:
+                    self.get_logger().warn('Inference result with no pending frame metadata; dropping')
+                    if self.in_flight > 0:
+                        self.in_flight -= 1
+                    return
+                origin_wh, scale, padding = self.meta_queue.popleft()
+                if self.in_flight > 0:
+                    self.in_flight -= 1
+
             for result_tensor in msg.tensor_list:  # iterate tensor_list
                 output_data = np.array(result_tensor.data)
                 depth_map = output_data.view(np.float32)
-                depth_color_map = self.postprocess(depth_map, self.origin_wh, self.scale, self.padding)                
-                msg = self.bridge.cv2_to_imgmsg(depth_color_map, encoding='bgr8')
-                self.publisher_.publish(msg)
-                self.get_logger().info('Published depth map')
-                self.msg_count = 0
+                depth_color_map = self.postprocess(depth_map, origin_wh, scale, padding)
+                out_msg = self.bridge.cv2_to_imgmsg(depth_color_map, encoding='bgr8')
+                self.publisher_.publish(out_msg)
+                latency_ms = (time.perf_counter() - start) * 1000
+                self.get_logger().info(f'Published depth map, post process: {latency_ms:.2f} ms')
         except Exception as e:
-            with self.inference_lock:
-                self.inference_in_progress = False
             if not self.stopping:
                 self.get_logger().error(f'Error processing image: {e}')
 
@@ -265,10 +310,10 @@ def main(args=None):
             elapsed = 0.0
             
             print("Waiting for in-flight inference to complete...")
-            
+
             while elapsed < max_wait_time:
-                with node.inference_lock:
-                    if not node.inference_in_progress:
+                with node.pipeline_lock:
+                    if node.in_flight == 0:
                         break
                 time.sleep(wait_interval)
                 elapsed += wait_interval
